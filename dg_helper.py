@@ -5,7 +5,7 @@ import json
 images_path = os.path.join(".","images")
 classes_images_path = os.path.join(images_path, "all_classes")
 mutations_images_path = os.path.join(images_path, "all_mutations")
-mutations_data_path = os.path.join(".","data_generation", "mutations_data.json")
+mutations_data_path = os.path.join(".", "mutations_data.json")
 
 all_classes = ["Newbies", "Tanks", "Fencers", "Tricksters", "Fighters", "Healers", "Throwers", "Shooters", "Cultists", "Mages", "Eggheads", "Summons"]
 print(len(all_classes))
@@ -135,6 +135,6 @@ def do_run(classes_run):
     
     root.mainloop()
 
-do_run(["Tricksters", "Mages"])
+#do_run(["Tricksters", "Mages"])
 
-#get_classes_run(do_run)
+get_classes_run(do_run)
