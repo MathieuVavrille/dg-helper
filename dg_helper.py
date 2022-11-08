@@ -16,27 +16,28 @@ def import_mutations():
 
 ALL_MUTATIONS = import_mutations()
 
-def stay_clicked(button, button_list):
+def stay_clicked(button, all_buttons):
     def clicked_rec():
         if button["relief"] == "raised":
             button.configure(relief="sunken",bg="black")
         else:
             button.configure(relief="raised",bg="white")
-        nb_buttons_clicked = sum(b.button["relief"] == "sunken" for b in button_list)
-        for b in button_list:
-            b.activate_or_not(nb_buttons_clicked)
+        nb_buttons_clicked = sum(b.button["relief"] == "sunken" for k,cbf in all_buttons.items() for b in cbf.unique+cbf.rare+cbf.common)
+        for k,cbf in all_buttons.items():
+            for b in cbf.unique+cbf.rare+cbf.common:
+                b.activate_or_not(nb_buttons_clicked)
     return clicked_rec
     
 
 class MutationButton():
     
-    def __init__(self, col, row, name, floor, root, button_list):
+    def __init__(self, col, row, name, floor, root, all_buttons):
         self.col = col
         self.row = row
         self.floor = floor
         self.photo = PhotoImage(file = os.path.join(mutations_images_path, f"{name}.png"))
         self.button = Button(root, image=self.photo, borderwidth=10, padx=10, pady=10, state="disabled" if floor > 1 else "normal")
-        self.button.configure(command=stay_clicked(self.button, button_list))
+        self.button.configure(command=stay_clicked(self.button, all_buttons))
         self.grid()
 
     def grid(self):
@@ -48,19 +49,39 @@ class MutationButton():
         else:
             self.button.configure(state="disabled")
 
+class ClassButtonsFrame():
+
+    def __init__(self, frame, unique=[], rare=[], common=[]):
+        self.unique = []
+        self.rare = []
+        self.common = []
+        self.frame = frame
+
+    def add_mutation(self, mutation, all_buttons):
+        if len(mutation["classes"]) == 10:
+            appended = self.common
+            row = 2
+        elif len(mutation["classes"]) <= 1:
+            appended = self.unique
+            row = 0
+        else:
+            appended = self.rare
+            row = 1
+        appended.append(MutationButton(len(appended), row, mutation["name"], mutation["Brawl Floor"], self.frame, all_buttons))
+
+            
 def generate_buttons(classes_run, root):
-    mutations_buttons = []
+    mutations_buttons = {}
     classes_logos = []
     classes_logos.append(PhotoImage(file=os.path.join(classes_images_path, f"Newbies.png")).zoom(2,2))
     text = Label(root, image=classes_logos[0])
     text.grid(column=0,row=0)
     neutral_frame = Frame(root, relief="ridge", borderwidth=5)
     neutral_frame.grid(column=1, row=0, sticky="w")
-    col = 0
+    mutations_buttons["Neutral"] = ClassButtonsFrame(neutral_frame)
     for mut in ALL_MUTATIONS:
         if mut["is_neutral"]:
-            mutations_buttons.append(MutationButton(col, 0, mut["name"], mut["Brawl Floor"], neutral_frame, mutations_buttons))
-            col += 1
+            mutations_buttons["Neutral"].add_mutation(mut, mutations_buttons)
     
     classes_frames = []
     for class_id in range(len(classes_run)):
@@ -69,24 +90,10 @@ def generate_buttons(classes_run, root):
         class_logo.grid(column=0,row=class_id+1)
         classes_frames.append(Frame(root,relief="ridge", borderwidth=5))
         classes_frames[-1].grid(column=1, row=class_id+1, sticky="w")
-        unique_cpt = -1
-        rare_cpt = -1
-        common_cpt = -1
+        mutations_buttons[classes_run[class_id]] = ClassButtonsFrame(classes_frames[-1])
         for mut in ALL_MUTATIONS:
             if classes_run[class_id] in mut["classes"]:
-                if len(mut["classes"]) == 10:
-                    row = 2
-                    common_cpt += 1
-                    col = common_cpt
-                elif len(mut["classes"]) == 1:
-                    row = 0
-                    unique_cpt += 1
-                    col = unique_cpt
-                else:
-                    row = 1
-                    rare_cpt += 1
-                    col = rare_cpt
-                mutations_buttons.append(MutationButton(col, row, mut["name"], mut["Brawl Floor"], classes_frames[-1], mutations_buttons))
+                mutations_buttons[classes_run[class_id]].add_mutation(mut, mutations_buttons)
     return mutations_buttons, classes_logos
     
     
@@ -135,6 +142,6 @@ def do_run(classes_run):
     
     root.mainloop()
 
-#do_run(["Tricksters", "Mages"])
+do_run(["Tricksters", "Mages"])
 
-get_classes_run(do_run)
+#get_classes_run(do_run)
