@@ -28,6 +28,14 @@ def import_mutations():
 
 ALL_MUTATIONS = import_mutations()
 
+def stay_clicked_simple(button):
+    def clicked_rec():
+        if button["relief"] == "raised":
+            button.configure(relief="sunken",bg="black")
+        else:
+            button.configure(relief="raised", bg="white")
+    return clicked_rec
+
 def stay_clicked(button, acm):
     def clicked_rec():
         button.click()
@@ -112,16 +120,16 @@ class MutationButton():
         self.button.configure(relief="raised", bg="white")
 
     def sunken_button(self):
-            self.button.configure(relief="sunken",bg="black")
+        self.button.configure(relief="sunken",bg="black")
 
     def is_sunken(self):
         return self.button["relief"] == "sunken"
 
     def click(self):
-        if self.button["relief"] == "raised":
-            self.sunken_button()
-        else:
+        if self.is_sunken():
             self.raise_button()
+        else:
+            self.sunken_button()
 
 class ClassButtonsFrame():
 
@@ -283,7 +291,7 @@ def get_classes_run(continuation):
         photo = PhotoImage(file = os.path.join(classes_images_path, f"{all_classes[i]}.png")).zoom(2,2)
         photos.append(photo)
         btn = Button(root, image=photo, borderwidth=5)
-        btn.configure(command=stay_clicked(btn,[]))
+        btn.configure(command=stay_clicked_simple(btn))
         btn.grid(column=i, row=1)
         buttons.append(btn)
 
