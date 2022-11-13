@@ -13,6 +13,12 @@ mutations_data_path = os.path.join(".", "mutations_data_brawl.json")
 layouts_folder = os.path.join(".", "layouts")
 create_folder(layouts_folder)
 
+def layout_filename(classes_run, is_brawl):
+    return "_".join(classes_run) + f"_{'brawl' if is_brawl else 'koth'}.json"
+
+def full_layout_path(classes_run, is_brawl):
+    return os.path.join(layouts_folder, layout_filename(classes_run, is_brawl))
+
 all_classes = ["Newbies", "Tanks", "Fencers", "Tricksters", "Fighters", "Healers", "Throwers", "Shooters", "Cultists", "Mages", "Eggheads", "Summons"]
 print(len(all_classes))
 
@@ -22,19 +28,10 @@ def import_mutations():
 
 ALL_MUTATIONS = import_mutations()
 
-def hide_or_show_floor_buttons(all_buttons):
-    nb_buttons_clicked = sum(b.button["relief"] == "sunken" for k,cbf in all_buttons.items() for b in cbf.unique+cbf.rare+cbf.common)
-    for k,cbf in all_buttons.items():
-        for b in cbf.unique+cbf.rare+cbf.common:
-            b.activate_or_not(nb_buttons_clicked)
-
-def stay_clicked(button, all_buttons):
+def stay_clicked(button, acm):
     def clicked_rec():
-        if button["relief"] == "raised":
-            button.configure(relief="sunken",bg="black")
-        else:
-            button.configure(relief="raised",bg="white")
-        hide_or_show_floor_buttons(all_buttons)
+        button.click()
+        acm.hide_or_show_floor_buttons()
     return clicked_rec
 
 def show_hide_arrows(main_button, all_buttons):
@@ -54,7 +51,6 @@ def move_button(i, button_list, is_left):
         swapi = i
         if is_left:
             swapi -= 1
-        print(swapi)
         button_list[swapi],button_list[swapi+1] = button_list[swapi+1], button_list[swapi]
         button_list[swapi].grid(swapi, button_list)
         button_list[swapi].enable_disable_arrows(len(button_list)-1)
@@ -62,15 +58,6 @@ def move_button(i, button_list, is_left):
         button_list[swapi+1].enable_disable_arrows(len(button_list)-1)
     return mb
 
-def save_layout(cbf, classes_run):
-    def sl():
-        res = []
-        for class_run in ["Neutral"]+classes_run:
-            res.append((class_run, cbf[class_run].generate_save_data()))
-        filename = "_".join(classes_run) + "_brawl.json"
-        with open(os.path.join(layouts_folder, filename), "w") as f:
-            f.write(json.dumps(res))
-    return sl
 
 class MutationButton():
     
@@ -81,8 +68,7 @@ class MutationButton():
         self.floor = floor
         self.photo = PhotoImage(file = os.path.join(mutations_images_path, f"{name}.png"))
         self.frame = Frame(root,borderwidth=0)
-        self.button = Button(self.frame, image=self.photo, borderwidth=10, state="disabled" if floor > 1 else "normal", padx=0, pady=0)
-        self.button.configure(command=stay_clicked(self.button, all_buttons))
+        self.button = Button(self.frame, image=self.photo, borderwidth=10, state="disabled" if floor > 1 else "normal", padx=0, pady=0, command=stay_clicked(self, all_buttons))
         self.button.grid(column=0, row=0, columnspan=2, rowspan=2)
         self.left = Button(self.frame, text="<", padx=0, pady=0, command=move_button(self.col, buttons_list, True))
         self.right = Button(self.frame, text=">", padx=0, pady=0, command=move_button(self.col, buttons_list, False))
@@ -112,7 +98,7 @@ class MutationButton():
         self.left.grid_forget()
         self.right.grid_forget()
 
-    def activate_or_not(self, nb_buttons_clicked):
+    def hide_or_show_floor_buttons(self, nb_buttons_clicked):
         if (nb_buttons_clicked+3)//2 >= self.floor:
             self.button.configure(state="normal")
         else:
@@ -120,7 +106,22 @@ class MutationButton():
                 self.button.configure(state="disabled")
 
     def generate_mutation_data(self):
-        return {"name":self.name, "floor":self.floor}
+        return {"name":self.name, "Brawl Floor":self.floor}
+
+    def raise_button(self):
+        self.button.configure(relief="raised", bg="white")
+
+    def sunken_button(self):
+            self.button.configure(relief="sunken",bg="black")
+
+    def is_sunken(self):
+        return self.button["relief"] == "sunken"
+
+    def click(self):
+        if self.button["relief"] == "raised":
+            self.sunken_button()
+        else:
+            self.raise_button()
 
 class ClassButtonsFrame():
 
@@ -147,7 +148,7 @@ class ClassButtonsFrame():
     def add_common(self, mutation, all_buttons):
         self.add_list(mutation, all_buttons, self.common, 2)
 
-    def all_buttons(self):
+    def get_all_buttons(self):
         return self.unique+self.rare+self.common
         
     def show_arrows(self):
@@ -157,7 +158,7 @@ class ClassButtonsFrame():
                 button.enable_disable_arrows(len(button_list)-1)
 
     def hide_arrows(self):
-        for button in self.all_buttons():
+        for button in self.get_all_buttons():
             button.hide_arrows()
 
     def generate_save_data(self):
@@ -165,44 +166,107 @@ class ClassButtonsFrame():
                 "rare":[m.generate_mutation_data() for m in self.rare],
                 "common":[m.generate_mutation_data() for m in self.common]}
 
+    def raise_buttons(self):
+        for button in self.get_all_buttons():
+            button.raise_button()
+
+    def nb_buttons_clicked(self):
+        return sum(b.is_sunken() for b in self.get_all_buttons())
+
+    def hide_or_show_floor_buttons(self, nb_buttons_clicked):
+        for b in self.get_all_buttons():
+            b.hide_or_show_floor_buttons(nb_buttons_clicked)
+
 class AllClassesMutations():
 
-    def __init__(self, root, row_offset):
-        pass
+    def __init__(self, root, row_offset, classes_run):
+        self.root = root
+        self.row_offset = row_offset
+        self.classes_run = classes_run
+        if os.path.exists(full_layout_path(classes_run, True)):
+            with open(full_layout_path(classes_run, True), "r") as f:
+                layout = json.loads(f.read())
+            self.load_layout(layout)
+        else:
+            print("does_not_exist")
+            self.base_layout()
+
+    def load_layout(self, layout):
+        self.classes_logos = []
+        self.buttons_frames = {}
+        for class_id in range(len(layout)):
+            class_name = layout[class_id][0]
+            class_layout = layout[class_id][1]
+            self.classes_logos.append(PhotoImage(file=os.path.join(classes_images_path, f"{class_name}.png")).zoom(2,2))
+            class_logo = Label(self.root, image=self.classes_logos[-1])
+            class_logo.grid(column=0,row=class_id+1+self.row_offset)
+            class_frame = Frame(self.root,relief="ridge", borderwidth=5)
+            class_frame.grid(column=1, row=class_id+1+self.row_offset, sticky="w")
+            self.buttons_frames[class_name] = ClassButtonsFrame(class_frame)
+            for mut in class_layout["unique"]:
+                self.buttons_frames[class_name].add_unique(mut, self)
+            for mut in class_layout["rare"]:
+                self.buttons_frames[class_name].add_rare(mut, self)
+            for mut in class_layout["common"]:
+                self.buttons_frames[class_name].add_common(mut, self)
+
+    def base_layout(self):
+        self.buttons_frames = {}
+        self.classes_logos = []
+        self.classes_logos.append(PhotoImage(file=os.path.join(classes_images_path, f"Newbies.png")).zoom(2,2))
+        text = Label(self.root, image=self.classes_logos[0])
+        text.grid(column=0,row=self.row_offset)
+        neutral_frame = Frame(self.root, relief="ridge", borderwidth=5)
+        neutral_frame.grid(column=1, row=self.row_offset, sticky="w")
+        self.buttons_frames["Neutral"] = ClassButtonsFrame(neutral_frame)
+        for mut in ALL_MUTATIONS:
+            if mut["is_neutral"]:
+                self.buttons_frames["Neutral"].add_mutation(mut, self)
+    
+        for class_id in range(len(self.classes_run)):
+            self.classes_logos.append(PhotoImage(file=os.path.join(classes_images_path, f"{self.classes_run[class_id]}.png")).zoom(2,2))
+            class_logo = Label(self.root, image=self.classes_logos[-1])
+            class_logo.grid(column=0,row=class_id+1+self.row_offset)
+            class_frame = Frame(self.root,relief="ridge", borderwidth=5)
+            class_frame.grid(column=1, row=class_id+1+self.row_offset, sticky="w")
+            self.buttons_frames[self.classes_run[class_id]] = ClassButtonsFrame(class_frame)
+            for mut in ALL_MUTATIONS:
+                if self.classes_run[class_id] in mut["classes"]:
+                    self.buttons_frames[self.classes_run[class_id]].add_mutation(mut, self)
+
+    def raise_all_buttons(self):
+        for k, cbf in self.buttons_frames.items():
+            cbf.raise_buttons()
+        self.hide_or_show_floor_buttons()
+
+            
+    def hide_or_show_floor_buttons(self):
+        nb_buttons_clicked = sum(cbf.nb_buttons_clicked() for k,cbf in self.buttons_frames.items())
+        for _,cbf in self.buttons_frames.items():
+            cbf.hide_or_show_floor_buttons(nb_buttons_clicked)
+
+    def save_layout(self):
+        res = []
+        for class_run in ["Neutral"]+self.classes_run:
+            res.append((class_run, self.buttons_frames[class_run].generate_save_data()))
+        with open(full_layout_path(self.classes_run, True), "w") as f:
+            f.write(json.dumps(res))
+    
             
 def generate_buttons(classes_run, root):
-    mutations_buttons = {}
-    classes_logos = []
-    classes_logos.append(PhotoImage(file=os.path.join(classes_images_path, f"Newbies.png")).zoom(2,2))
-    text = Label(root, image=classes_logos[0])
-    text.grid(column=0,row=1)
-    neutral_frame = Frame(root, relief="ridge", borderwidth=5)
-    neutral_frame.grid(column=1, row=1, sticky="w")
-    mutations_buttons["Neutral"] = ClassButtonsFrame(neutral_frame)
-    for mut in ALL_MUTATIONS:
-        if mut["is_neutral"]:
-            mutations_buttons["Neutral"].add_mutation(mut, mutations_buttons)
-    
-    classes_frames = []
-    for class_id in range(len(classes_run)):
-        classes_logos.append(PhotoImage(file=os.path.join(classes_images_path, f"{classes_run[class_id]}.png")).zoom(2,2))
-        class_logo = Label(root, image=classes_logos[-1])
-        class_logo.grid(column=0,row=class_id+2)
-        classes_frames.append(Frame(root,relief="ridge", borderwidth=5))
-        classes_frames[-1].grid(column=1, row=class_id+2, sticky="w")
-        mutations_buttons[classes_run[class_id]] = ClassButtonsFrame(classes_frames[-1])
-        for mut in ALL_MUTATIONS:
-            if classes_run[class_id] in mut["classes"]:
-                mutations_buttons[classes_run[class_id]].add_mutation(mut, mutations_buttons)
 
+    acm = AllClassesMutations(root, 1, classes_run)
+    
     settings_frame = Frame(root,relief="ridge", borderwidth=5)
     settings_frame.grid(column=0, columnspan=2, row=0, sticky="we")
     show_arrows_button = Button(settings_frame, text="Move Mutations")
-    show_arrows_button.configure(command=show_hide_arrows(show_arrows_button, mutations_buttons))
+    show_arrows_button.configure(command=show_hide_arrows(show_arrows_button, acm.buttons_frames))
     show_arrows_button.grid(column=0, row=0)
-    save_layout_button = Button(settings_frame, text="Save Layout", command=save_layout(mutations_buttons, classes_run))
+    save_layout_button = Button(settings_frame, text="Save Layout", command=acm.save_layout)
     save_layout_button.grid(column=1, row=0)
-    return mutations_buttons, classes_logos, show_arrows_button
+    reset_run_button = Button(settings_frame, text="Reset Run", command=acm.raise_all_buttons)
+    reset_run_button.grid(column=2, row=0)
+    return acm
     
     
 def get_classes_run(continuation):
@@ -250,6 +314,6 @@ def do_run(classes_run):
     
     root.mainloop()
 
-do_run(["Tricksters", "Mages"])
+#do_run(["Tricksters", "Mages"])
 
-#get_classes_run(do_run)
+get_classes_run(do_run)
